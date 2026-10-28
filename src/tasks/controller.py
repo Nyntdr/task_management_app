@@ -3,7 +3,6 @@ from src.tasks.schemas import TaskSchema
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-
 def create_task(body: TaskSchema,db: Session):
     data= body.model_dump()
     # new_task= TaskModel(**data)
@@ -15,8 +14,6 @@ def create_task(body: TaskSchema,db: Session):
     db.commit()
     db.refresh(new_task)
     return {"message": "Task created successfully","data": new_task}
-
-
 
 def get_tasks(db:Session):
     tasks= db.query(TaskModel).all()
@@ -34,9 +31,11 @@ def update_task(task_id:int, body: TaskSchema, db:Session):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     data= body.model_dump()
-    task.title= data['title']
-    task.description= data['description']
-    task.is_completed= data['is_completed']
+
+    for field, value in data.items():
+        setattr(task, field, value)
+        
+    db.add(task)    
     db.commit()
     db.refresh(task)
     return {"message": "Task updated successfully","data": task}

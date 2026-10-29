@@ -1,7 +1,7 @@
 from src.users.schemas import LoginSchema, UserSchema
 from sqlalchemy.orm import Session
 from src.users.models import UserModel
-from fastapi import HTTPException,status,Request
+from fastapi import HTTPException,status,Request,BackgroundTasks
 from pwdlib import PasswordHash
 from datetime import datetime, timedelta
 import jwt
@@ -17,7 +17,7 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return password_hash.hash(password)
 
-async def register(body: UserSchema, db:Session):
+async def register(body: UserSchema,bg_task:BackgroundTasks,db: Session):
     is_user = db.query(UserModel).filter(UserModel.username == body.username).first()
     if is_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists.")
@@ -38,24 +38,27 @@ async def register(body: UserSchema, db:Session):
     db.commit()
     db.refresh(new_user)
 
-    ##send email confiratmion message to the registered user email address
-    await send_email([new_user.email])
-
+    ##send email confiratmion message to the registered user email address in background
+    bg_task.add_task(send_email,[new_user.email])
     return new_user
 
 
-def login_user(body:LoginSchema ,db:Session):
-    is_user = db.query(UserModel).filter(UserModel.username == body.username).first()
+from sqlalchemy import or_
+
+def login_user(body: LoginSchema, db: Session):
+    is_user = db.query(UserModel).filter(
+        or_(UserModel.username == body.username)
+    ).first()
     if not is_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Username is not correct.")   
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Username or email is not correct.")   
 
     if not verify_password(body.password, is_user.hash_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,detail="Password is wrong.")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Password is wrong.")
     
-    exp_time= datetime.now()+ timedelta(minutes=settings.EXP_TIME)
-    token=jwt.encode({"_id":is_user.id, "exp":exp_time.timestamp()},settings.SECRET_KEY,settings.ALGORITHM)
+    exp_time = datetime.now() + timedelta(minutes=settings.EXP_TIME)
+    token = jwt.encode({"_id": is_user.id, "exp": exp_time.timestamp()}, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
      
-    return { "token":token}
+    return {"token": token}
 
 
 

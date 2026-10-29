@@ -3,7 +3,7 @@ from src.utils.db import Base, engine
 from src.tasks.router import task_routes
 from src.users.router import user_routes
 
-Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine) #only create tables if they don't exist, it won't drop existing tables
 
 app=FastAPI(title="Task Management App")
 app.include_router(task_routes)
